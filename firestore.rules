@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Each room is one document. The room ID in the share link acts as the password:
+    // it can be read/written only by someone who knows it, and rooms cannot be listed or deleted.
+    match /rooms/{roomId} {
+      allow get, create, update: if roomId.size() >= 20;
+      allow list, delete: if false;
+    }
+  }
+}

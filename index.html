@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e6fd9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="対戦ランキング">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="style.css">
+<title>対戦ランキング</title>
+</head>
+<body>
+<header>
+  <button id="prevMonth" class="month-btn" aria-label="前の月">‹</button>
+  <h1 id="monthLabel"></h1>
+  <button id="nextMonth" class="month-btn" aria-label="次の月">›</button>
+</header>
+
+<main>
+  <section id="view-ranking" class="view"></section>
+  <section id="view-table" class="view"></section>
+  <section id="view-register" class="view"></section>
+  <section id="view-members" class="view"></section>
+  <section id="view-settings" class="view"></section>
+</main>
+
+<nav>
+  <button data-view="ranking"><span class="ic">🏆</span><span>ランキング</span></button>
+  <button data-view="table"><span class="ic">▦</span><span>対戦表</span></button>
+  <button data-view="register"><span class="ic">＋</span><span>登録</span></button>
+  <button data-view="members"><span class="ic">👥</span><span>メンバー</span></button>
+  <button data-view="settings"><span class="ic">⚙</span><span>設定</span></button>
+</nav>
+
+<div id="toast"></div>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
