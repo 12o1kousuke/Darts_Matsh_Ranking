@@ -68,9 +68,9 @@ function standings(month) {
   rows.forEach(r => {
     r.games = r.w + r.l;
     r.regs = r.gf + r.ga;              // 総Reg数
-    r.diff = r.gf - r.ga;              // Reg差（reg モードの pt でもある）
+    r.diff = r.gf - r.ga;              // Reg差（勝Reg − 敗Reg）
     if (mode === 'reg') {
-      r.pt = r.diff;
+      r.pt = r.gf;                     // pt = 勝Regの積み上げ（勝った本数の合計）
       r.rate = r.regs ? r.gf / r.regs : 0;   // Reg勝率 = 勝Reg / 総Reg
     } else {
       r.pt = r.w * win + r.l * loss;
@@ -92,7 +92,7 @@ function score(m) { return `2-${m.lg}`; }
 function pointRule() {
   const { win, loss, mode } = db.settings;
   return mode === 'reg'
-    ? 'pt = 勝Reg − 敗Reg ・ 勝率 = 勝Reg ÷ 総Reg'
+    ? 'pt = 勝Reg（勝った本数の合計）・ 差 = 勝Reg − 敗Reg ・ 勝率 = 勝Reg ÷ 総Reg'
     : `勝ち ${fmtPt(win)}pt / 負け ${fmtPt(loss)}pt ・ 勝率 = 勝 ÷ 試合数`;
 }
 
@@ -116,7 +116,7 @@ function renderRanking() {
   el.innerHTML = `
     <div class="card">
       <table class="rank">
-        <thead><tr><th>順位</th><th class="name">名前</th><th>勝</th><th>敗</th><th>勝Reg</th><th>敗Reg</th><th>pt</th><th>勝率</th></tr></thead>
+        <thead><tr><th>順位</th><th class="name">名前</th><th>勝</th><th>敗</th><th>勝Reg</th><th>敗Reg</th><th>差</th><th>pt</th><th>勝率</th></tr></thead>
         <tbody>
           ${rows.map(r => `
             <tr>
@@ -126,6 +126,7 @@ function renderRanking() {
               <td>${r.l}</td>
               <td>${r.gf}</td>
               <td>${r.ga}</td>
+              <td>${r.regs ? fmtDiff(r.diff) : '-'}</td>
               <td class="pt">${fmtPt(r.pt)}</td>
               <td>${r.games ? (r.rate * 100).toFixed(0) + '%' : '-'}</td>
             </tr>`).join('')}
@@ -161,7 +162,7 @@ function renderTable() {
           <thead><tr>
             <th></th>
             ${ms.map(m => `<th class="vname">${esc(m.name)}</th>`).join('')}
-            <th>勝</th><th>敗</th><th>勝Reg</th><th>敗Reg</th><th>pt</th><th>勝率</th><th>順位</th>
+            <th>勝</th><th>敗</th><th>勝Reg</th><th>敗Reg</th><th>差</th><th>pt</th><th>勝率</th><th>順位</th>
           </tr></thead>
           <tbody>
             ${ms.map(row => `<tr>
@@ -171,6 +172,7 @@ function renderTable() {
               <td class="sum">${st[row.id].l}</td>
               <td class="sum">${st[row.id].gf}</td>
               <td class="sum">${st[row.id].ga}</td>
+              <td class="sum">${st[row.id].regs ? fmtDiff(st[row.id].diff) : '-'}</td>
               <td class="sum pt">${fmtPt(st[row.id].pt)}</td>
               <td class="sum">${st[row.id].games ? (st[row.id].rate * 100).toFixed(0) + '%' : '-'}</td>
               <td class="sum">${st[row.id].rank}</td>
@@ -293,7 +295,7 @@ function renderSettings() {
         <label class="field">計算方法
           <select id="mode">
             <option value="match" ${db.settings.mode !== 'reg' ? 'selected' : ''}>試合の勝敗でpt（勝ち◯pt / 負け◯pt）</option>
-            <option value="reg" ${db.settings.mode === 'reg' ? 'selected' : ''}>Regでpt（pt = 勝Reg − 敗Reg）</option>
+            <option value="reg" ${db.settings.mode === 'reg' ? 'selected' : ''}>Regでpt（pt = 勝Regの合計）</option>
           </select>
         </label>
         <div class="row" id="ptInputs" style="${db.settings.mode === 'reg' ? 'display:none' : ''}">
@@ -303,7 +305,7 @@ function renderSettings() {
         <button class="btn">保存</button>
       </form>
       <p class="note">${db.settings.mode === 'reg'
-        ? 'Reg方式：pt = 勝Reg − 敗Reg、勝率 = 勝Reg ÷ 総Reg で計算します。'
+        ? 'Reg方式：pt = 勝Reg（勝った本数の合計）、差 = 勝Reg − 敗Reg、勝率 = 勝Reg ÷ 総Reg で計算します。'
         : '試合方式：pt = 勝ち×勝ちpt ＋ 負け×負けpt、勝率 = 勝ち ÷ 試合数 で計算します。'}<br>変更は全ての月のランキングに反映されます</p>
     </div>
     <div class="card">
