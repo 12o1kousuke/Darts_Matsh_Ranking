@@ -1,7 +1,8 @@
 'use strict';
 
 const STORAGE_KEY = 'match-ranking-v1';
-const DEFAULT_SETTINGS = { win: 2, loss: 1, bonus: false, bonusPt: 1, maxPerPair: 3 };
+// mode: 'match' = ptを試合の勝敗で計算 / 'reg' = ptを勝Reg−敗Regで計算
+const DEFAULT_SETTINGS = { win: 2, loss: 1, maxPerPair: 3, mode: 'match' };
 
 const $ = sel => document.querySelector(sel);
 
@@ -54,22 +55,29 @@ function monthMembers(month) {
 }
 
 function standings(month) {
-  const { win, loss, bonus, bonusPt } = db.settings;
-  const rows = monthMembers(month).map(m => ({ id: m.id, name: m.name, w: 0, l: 0, sweeps: 0, gf: 0, ga: 0 }));
+  const { win, loss, mode } = db.settings;
+  // gf/ga = 勝Reg/敗Reg（取った本数 / 取られた本数）
+  const rows = monthMembers(month).map(m => ({ id: m.id, name: m.name, w: 0, l: 0, gf: 0, ga: 0 }));
   const byId = Object.fromEntries(rows.map(r => [r.id, r]));
   monthMatches(month).forEach(m => {
     const loser = m.winner === m.a ? m.b : m.a;
     const w = byId[m.winner], l = byId[loser];
-    if (w) { w.w++; w.gf += 2; w.ga += m.lg; if (m.lg === 0) w.sweeps++; }
+    if (w) { w.w++; w.gf += 2; w.ga += m.lg; }
     if (l) { l.l++; l.gf += m.lg; l.ga += 2; }
   });
   rows.forEach(r => {
     r.games = r.w + r.l;
-    r.pt = r.w * win + r.l * loss + (bonus ? r.sweeps * bonusPt : 0);
-    r.diff = r.gf - r.ga;
-    r.rate = r.games ? r.w / r.games : 0;
+    r.regs = r.gf + r.ga;              // 総Reg数
+    r.diff = r.gf - r.ga;              // Reg差（reg モードの pt でもある）
+    if (mode === 'reg') {
+      r.pt = r.diff;
+      r.rate = r.regs ? r.gf / r.regs : 0;   // Reg勝率 = 勝Reg / 総Reg
+    } else {
+      r.pt = r.w * win + r.l * loss;
+      r.rate = r.games ? r.w / r.games : 0;  // 試合勝率 = 勝 / 試合数
+    }
   });
-  // Order: points → wins → game difference → name
+  // Order: points → wins → Reg difference → name
   rows.sort((x, y) => y.pt - x.pt || y.w - x.w || y.diff - x.diff || x.name.localeCompare(y.name, 'ja'));
   rows.forEach((r, i) => {
     const p = rows[i - 1];
@@ -82,8 +90,10 @@ function fmtPt(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
 function fmtDiff(n) { return n > 0 ? `+${n}` : String(n); }
 function score(m) { return `2-${m.lg}`; }
 function pointRule() {
-  const { win, loss, bonus, bonusPt } = db.settings;
-  return `勝ち ${fmtPt(win)}pt / 負け ${fmtPt(loss)}pt` + (bonus ? ` / 2-0勝利ボーナス +${fmtPt(bonusPt)}pt` : '');
+  const { win, loss, mode } = db.settings;
+  return mode === 'reg'
+    ? 'pt = 勝Reg − 敗Reg ・ 勝率 = 勝Reg ÷ 総Reg'
+    : `勝ち ${fmtPt(win)}pt / 負け ${fmtPt(loss)}pt ・ 勝率 = 勝 ÷ 試合数`;
 }
 
 // ---------- Rendering ----------
@@ -106,21 +116,22 @@ function renderRanking() {
   el.innerHTML = `
     <div class="card">
       <table class="rank">
-        <thead><tr><th>順位</th><th class="name">名前</th><th>pt</th><th>勝</th><th>敗</th><th>本差</th><th>勝率</th></tr></thead>
+        <thead><tr><th>順位</th><th class="name">名前</th><th>勝</th><th>敗</th><th>勝Reg</th><th>敗Reg</th><th>pt</th><th>勝率</th></tr></thead>
         <tbody>
           ${rows.map(r => `
             <tr>
               <td class="rk">${medal(r)}</td>
               <td class="name">${esc(r.name)}</td>
-              <td class="pt">${fmtPt(r.pt)}</td>
               <td>${r.w}</td>
               <td>${r.l}</td>
-              <td>${r.games ? fmtDiff(r.diff) : '-'}</td>
+              <td>${r.gf}</td>
+              <td>${r.ga}</td>
+              <td class="pt">${fmtPt(r.pt)}</td>
               <td>${r.games ? (r.rate * 100).toFixed(0) + '%' : '-'}</td>
             </tr>`).join('')}
         </tbody>
       </table>
-      <p class="note">${pointRule()}<br>同pt時は 勝数 → 本差（取った本数 − 取られた本数）の順</p>
+      <p class="note">${pointRule()}<br>同pt時は 勝数 → Reg差 の順</p>
     </div>`;
 }
 
@@ -150,7 +161,7 @@ function renderTable() {
           <thead><tr>
             <th></th>
             ${ms.map(m => `<th class="vname">${esc(m.name)}</th>`).join('')}
-            <th>勝</th><th>敗</th><th>pt</th><th>順位</th>
+            <th>勝</th><th>敗</th><th>勝Reg</th><th>敗Reg</th><th>pt</th><th>勝率</th><th>順位</th>
           </tr></thead>
           <tbody>
             ${ms.map(row => `<tr>
@@ -158,7 +169,10 @@ function renderTable() {
               ${ms.map(col => cell(row, col)).join('')}
               <td class="sum">${st[row.id].w}</td>
               <td class="sum">${st[row.id].l}</td>
+              <td class="sum">${st[row.id].gf}</td>
+              <td class="sum">${st[row.id].ga}</td>
               <td class="sum pt">${fmtPt(st[row.id].pt)}</td>
+              <td class="sum">${st[row.id].games ? (st[row.id].rate * 100).toFixed(0) + '%' : '-'}</td>
               <td class="sum">${st[row.id].rank}</td>
             </tr>`).join('')}
           </tbody>
@@ -274,17 +288,23 @@ function renderSettings() {
   el.innerHTML = `
     ${shareCardHtml()}
     <div class="card">
-      <h2>ポイント設定</h2>
+      <h2>ポイント計算方法</h2>
       <form id="pointForm">
-        <div class="row">
+        <label class="field">計算方法
+          <select id="mode">
+            <option value="match" ${db.settings.mode !== 'reg' ? 'selected' : ''}>試合の勝敗でpt（勝ち◯pt / 負け◯pt）</option>
+            <option value="reg" ${db.settings.mode === 'reg' ? 'selected' : ''}>Regでpt（pt = 勝Reg − 敗Reg）</option>
+          </select>
+        </label>
+        <div class="row" id="ptInputs" style="${db.settings.mode === 'reg' ? 'display:none' : ''}">
           <label class="field">勝ちポイント<input id="winPt" type="number" inputmode="decimal" step="0.5" min="0" value="${db.settings.win}"></label>
           <label class="field">負けポイント<input id="lossPt" type="number" inputmode="decimal" step="0.5" min="0" value="${db.settings.loss}"></label>
         </div>
-        <label class="toggle"><input id="bonusOn" type="checkbox" ${db.settings.bonus ? 'checked' : ''}> 2-0勝利ボーナス</label>
-        <label class="field">ボーナスポイント（2-0で勝った時に加算）<input id="bonusPt" type="number" inputmode="decimal" step="0.5" min="0" value="${db.settings.bonusPt}"></label>
         <button class="btn">保存</button>
       </form>
-      <p class="note">変更は全ての月のランキングに反映されます</p>
+      <p class="note">${db.settings.mode === 'reg'
+        ? 'Reg方式：pt = 勝Reg − 敗Reg、勝率 = 勝Reg ÷ 総Reg で計算します。'
+        : '試合方式：pt = 勝ち×勝ちpt ＋ 負け×負けpt、勝率 = 勝ち ÷ 試合数 で計算します。'}<br>変更は全ての月のランキングに反映されます</p>
     </div>
     <div class="card">
       <h2>対戦数の上限</h2>
@@ -508,6 +528,7 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   if (e.target.id === 'regA') { state.regA = e.target.value; render(); }
   else if (e.target.id === 'regB') { state.regB = e.target.value; render(); }
+  else if (e.target.id === 'mode') { const box = $('#ptInputs'); if (box) box.style.display = e.target.value === 'reg' ? 'none' : ''; }
   else if (e.target.id === 'importFile') {
     const file = e.target.files[0];
     if (!file) return;
@@ -525,10 +546,14 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   if (e.target.id === 'addMember') addMember($('#newName').value);
   else if (e.target.id === 'pointForm') {
-    const win = parseFloat($('#winPt').value), loss = parseFloat($('#lossPt').value), bonusPt = parseFloat($('#bonusPt').value);
-    if (!(win >= 0) || !(loss >= 0) || !(bonusPt >= 0)) { toast('0以上の数値を入力してください'); return; }
-    const bonus = $('#bonusOn').checked;
-    update(d => { Object.assign(d.settings, { win, loss, bonus, bonusPt }); }, '保存しました');
+    const mode = $('#mode').value === 'reg' ? 'reg' : 'match';
+    const patch = { mode };
+    if (mode === 'match') {
+      const win = parseFloat($('#winPt').value), loss = parseFloat($('#lossPt').value);
+      if (!(win >= 0) || !(loss >= 0)) { toast('0以上の数値を入力してください'); return; }
+      patch.win = win; patch.loss = loss;
+    }
+    update(d => { Object.assign(d.settings, patch); }, '保存しました');
   } else if (e.target.id === 'limitForm') {
     const n = Number($('#maxPerPair').value);
     if (!Number.isInteger(n) || n < 1) { toast('1以上の整数を入力してください'); return; }

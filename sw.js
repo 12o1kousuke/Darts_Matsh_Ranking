@@ -1,5 +1,5 @@
 // Network-first with cache fallback so the app works offline and still picks up updates.
-const CACHE = 'match-ranking-v4';
+const CACHE = 'match-ranking-v5';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './manifest.json', './icon.svg', './firebase-config.js'];
 
 self.addEventListener('install', e => {
